@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vortex Studio | Custom Spiral Art</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap');
+
+        :root {
+            --bg-color: #f0ece1;
+            --panel-bg: #ffffff;
+            --text-dark: #2d2a26;
+            --accent-brand: #ff6b6b;
+            --border-radius: 16px;
+            
+            /* Dynamic SVG Colors */
+            --spiral-color: #000000;
+            --canvas-color: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-dark);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-image: radial-gradient(circle at 50% 50%, #faf8f5 0%, #e8e4d9 100%);
+        }
+
+        /* --- Artwork Workspace --- */
+        .workspace {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .art-board {
+            width: 70vh;
+            height: 70vh;
+            max-width: 800px;
+            max-height: 800px;
+            background-color: var(--canvas-color);
+            border-radius: 50%;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: all 0.3s ease; /* Added for smooth drag hover */
+            border: 4px solid white;
+            position: relative;
+        }
+
+        /* Drag & Drop Visual States */
+        .art-board.is-empty { cursor: pointer; }
+        .art-board.is-empty:hover { box-shadow: 0 25px 60px rgba(0,0,0,0.15); transform: translateY(-2px); }
+        .art-board.drag-over { 
+            border-color: var(--accent-brand); 
+            background-color: rgba(255, 107, 107, 0.05); 
+            transform: scale(1.02); 
+        }
+
+        .art-board svg { width: 105%; height: 105%; }
+        .art-board svg path {
+            stroke: var(--spiral-color) !important;
+            transition: stroke 0.3s ease;
+        }
+
+        .empty-state {
+            color: #b0aba0;
+            text-align: center;
+            font-weight: 500;
+            letter-spacing: 1px;
+            pointer-events: none; /* Lets clicks pass through to the art-board */
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            color: var(--accent-brand);
+            z-index: 10;
+        }
+
+        /* --- Floating Control Panel --- */
+        .control-panel {
+            width: 360px;
+            background: var(--panel-bg);
+            margin: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .panel-header { padding: 1.5rem 1.5rem 0.5rem; text-align: center; }
+        .panel-header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+        .panel-section { padding: 1.5rem; border-bottom: 1px solid #f0f0f0; }
+        .panel-section:last-child { border-bottom: none; }
+
+        /* Upload Styling */
+        .upload-btn {
+            display: block; width: 100%; padding: 1rem;
+            background: #f8f9fa; border: 2px dashed #dcdcdc; border-radius: 12px;
+            text-align: center; font-weight: 500; cursor: pointer;
+            transition: all 0.2s; box-sizing: border-box; color: var(--text-dark);
+        }
+        .upload-btn:hover { border-color: var(--accent-brand); background: #fff8f8; color: var(--accent-brand); }
+        input[type="file"] { display: none; }
+
+        /* Sliders */
+        .control-label { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 500; margin-bottom: 10px; }
+        .val-badge { background: #f0f0f0; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin-bottom: 1.5rem; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: var(--accent-brand); cursor: pointer; margin-top: -6px; box-shadow: 0 2px 5px rgba(255, 107, 107, 0.4); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #e9ecef; border-radius: 3px; }
+
+        /* Color Pickers */
+        .color-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .color-picker { -webkit-appearance: none; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; padding: 0; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-picker::-webkit-color-swatch { border: none; }
+
+        /* Action Buttons */
+        .btn-download {
+            width: 100%; padding: 1rem; border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 700; cursor: pointer; transition: transform 0.1s;
+            background: #2d2a26; color: white; display: none;
+        }
+        .btn-download:active { transform: translateY(2px); }
+
+        /* Monetization Section */
+        .support-container {
+            padding: 1rem 1.5rem 1.5rem; display: flex; flex-direction: column; gap: 10px;
+            background-color: #faf9f7; border-bottom-left-radius: var(--border-radius);
+            border-bottom-right-radius: var(--border-radius); text-align: center;
+        }
+        .support-title { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #a0a0a0; letter-spacing: 1px; margin-bottom: 5px; }
+        .btn-support {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 10px; border-radius: 8px; text-decoration: none; font-weight: 600;
+            font-size: 0.9rem; transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn-support:active { transform: translateY(1px); }
+        .btn-support:hover { opacity: 0.9; }
+        .btn-serin { background-color: #f8f9fa; color: #2d2a26; border: 1px solid #dcdcdc; }
+    </style>
+</head>
+<body>
+
+    <div class="workspace">
+        <div class="art-board is-empty" id="art-board">
+            <div class="loading-overlay" id="loading-overlay">Computing...</div>
+            <div id="svg-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;">
+                <div class="empty-state">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 10px; opacity: 0.5;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg><br>
+                    Drag & Drop an image here<br>
+                    <span style="font-size: 0.8rem; opacity: 0.7;">(Or click to browse)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <div class="panel-header">
+            <h1>Vortex Studio</h1>
+        </div>
+
+        <div class="panel-section">
+            <label class="upload-btn" for="imageUpload" id="upload-label">
+                📸 Choose an Image...
+            </label>
+            <input type="file" id="imageUpload" accept="image/png, image/jpeg">
+        </div>
+
+        <div class="panel-section">
+            <div class="control-label">
+                <span>Rings (Detail)</span>
+                <span class="val-badge" id="loopsVal">65</span>
+            </div>
+            <input type="range" id="loops" min="30" max="150" value="65">
+
+            <div class="control-label">
+                <span>Line Scale (Contrast)</span>
+                <span class="val-badge" id="thicknessVal">9.0</span>
+            </div>
+            <input type="range" id="thickness" min="2" max="20" step="0.5" value="9.0">
+        </div>
+
+        <div class="panel-section" style="background-color: #faf9f7;">
+            <div style="font-size: 0.8rem; text-transform: uppercase; font-weight: 700; color: #a0a0a0; margin-bottom: 15px; letter-spacing: 1px;">Color Studio</div>
+            
+            <div class="color-row">
+                <span style="font-weight: 500; font-size: 0.9rem;">Spiral Ink</span>
+                <input type="color" id="spiralColor" class="color-picker" value="#000000">
+            </div>
+            <div class="color-row">
+                <span style="font-weight: 500; font-size: 0.9rem;">Paper Base</span>
+                <input type="color" id="canvasColor" class="color-picker" value="#ffffff">
+            </div>
+        </div>
+
+        <div class="panel-section" style="border-bottom: none;">
+            <button class="btn-download" id="downloadBtn">⬇ Download PNG</button>
+        </div>
+
+           </div>
+
+    <script>
+        const root = document.documentElement;
+        const fileInput = document.getElementById('imageUpload');
+        const uploadLabel = document.getElementById('upload-label');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loopsSlider = document.getElementById('loops');
+        const thicknessSlider = document.getElementById('thickness');
+        const artBoard = document.getElementById('art-board');
+
+        let currentSvgData = null;
+
+        // Dynamic Color Handlers
+        document.getElementById('spiralColor').addEventListener('input', (e) => root.style.setProperty('--spiral-color', e.target.value));
+        document.getElementById('canvasColor').addEventListener('input', (e) => root.style.setProperty('--canvas-color', e.target.value));
+
+        // ---------------------------------------------------------
+        // CORE PROCESSING FUNCTION (Julia API)
+        // ---------------------------------------------------------
+        async function processImageToJulia() {
+            if (!fileInput.files[0]) return;
+            loadingOverlay.style.display = 'flex';
+            artBoard.classList.remove('is-empty'); // Remove the pointer cursor once an image is loaded
+
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            formData.append('loops', loopsSlider.value);
+            formData.append('max_thickness', thicknessSlider.value);
+
+            try {
+                const response = await fetch('/generate-spiral', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error("Server error");
+                
+                currentSvgData = await response.text();
+                document.getElementById('svg-container').innerHTML = currentSvgData;
+                downloadBtn.style.display = 'block';
+                downloadBtn.textContent = "⬇ Download PNG";
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Connection failed. Is the Julia server running?");
+            } finally {
+                loadingOverlay.style.display = 'none';
+            }
+        }
+
+        const debouncedProcess = (func, wait) => {
+            let timeout;
+            return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); };
+        };
+        const handleProcess = debouncedProcess(processImageToJulia, 400);
+
+        // ---------------------------------------------------------
+        // DRAG AND DROP & CLICK UPLOAD LOGIC
+        // ---------------------------------------------------------
+        
+        // 1. Click empty board to upload
+        artBoard.addEventListener('click', () => {
+            if (!currentSvgData) fileInput.click();
+        });
+
+        // 2. Prevent default browser drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            artBoard.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+
+        // 3. Visual feedback on hover
+        ['dragenter', 'dragover'].forEach(eventName => {
+            artBoard.addEventListener(eventName, () => {
+                if (!currentSvgData) artBoard.classList.add('drag-over');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            artBoard.addEventListener(eventName, () => artBoard.classList.remove('drag-over'), false);
+        });
+
+        // 4. Handle the actual drop
+        artBoard.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    // Update the hidden file input with the dropped file using DataTransfer
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileInput.files = dataTransfer.files;
+                    
+                    // Trigger the UI updates and processing
+                    uploadLabel.innerHTML = `✅ ${file.name}`;
+                    uploadLabel.style.borderColor = "var(--accent-brand)";
+                    processImageToJulia();
+                } else {
+                    alert("Please drop a valid image file (PNG, JPG).");
+                }
+            }
+        }, false);
+
+        // Standard Input Change (Fallback)
+        fileInput.addEventListener('change', (e) => {
+            if(e.target.files.length > 0) {
+                uploadLabel.innerHTML = `✅ ${e.target.files[0].name}`;
+                uploadLabel.style.borderColor = "var(--accent-brand)";
+                processImageToJulia(); 
+            }
+        });
+
+        // Sliders
+        loopsSlider.addEventListener('input', (e) => { document.getElementById('loopsVal').textContent = e.target.value; handleProcess(); });
+        thicknessSlider.addEventListener('input', (e) => { document.getElementById('thicknessVal').textContent = parseFloat(e.target.value).toFixed(1); handleProcess(); });
+
+        // ---------------------------------------------------------
+        // ADVANCED DOWNLOAD LOGIC (Safe XML Parsing -> Canvas -> PNG)
+        // ---------------------------------------------------------
+        downloadBtn.addEventListener('click', () => {
+            if (!currentSvgData) return;
+            const originalText = downloadBtn.textContent;
+            downloadBtn.textContent = "Rendering PNG...";
+            
+            const spiralColor = getComputedStyle(root).getPropertyValue('--spiral-color').trim();
+            const canvasColor = getComputedStyle(root).getPropertyValue('--canvas-color').trim();
+            
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(currentSvgData, "image/svg+xml");
+            const svgElement = svgDoc.documentElement;
+            
+            svgElement.style.backgroundColor = canvasColor;
+            svgElement.setAttribute('width', '2000');
+            svgElement.setAttribute('height', '2000');
+            
+            svgElement.querySelectorAll('path').forEach(path => path.setAttribute('stroke', spiralColor));
+            
+            const serializer = new XMLSerializer();
+            const modifiedSvg = serializer.serializeToString(svgDoc);
+            const svgBlob = new Blob([modifiedSvg], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            const img = new Image();
+            img.onerror = () => {
+                downloadBtn.textContent = "Error Rendering";
+                setTimeout(() => downloadBtn.textContent = originalText, 2000);
+            };
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 2000; canvas.height = 2000;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = canvasColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                
+                const pngUrl = canvas.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = pngUrl;
+                a.download = 'vortex_colored.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                URL.revokeObjectURL(svgUrl);
+                downloadBtn.textContent = originalText;
+            };
+            img.src = svgUrl;
+        });
+    </script>
+</body>
+</html>
